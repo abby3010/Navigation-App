@@ -1,9 +1,12 @@
 package com.example.navigation_abby;
 
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.animation.BounceInterpolator;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -20,6 +23,8 @@ import com.mapbox.geojson.Point;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.location.LocationComponent;
+import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions;
+import com.mapbox.mapboxsdk.location.LocationComponentOptions;
 import com.mapbox.mapboxsdk.location.modes.CameraMode;
 import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
@@ -60,10 +65,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private LocationComponent locationComponent;
     // variables for calculating and drawing a route
     private DirectionsRoute currentRoute;
-//    private static final String TAG = "DirectionsActivity";
-    private NavigationMapRoute navigationMapRoute;
+    private static final String SOURCE_ID = "SOURCE_ID";
     // variables needed to initialize navigation
     private Button button;
+    private static final String ICON_ID = "ICON_ID";
+    private static final String LAYER_ID = "LAYER_ID";
+    //private static final String TAG = "DirectionsActivity";
+    private NavigationMapRoute navigationMapRoute;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -179,13 +187,46 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void enableLocationComponent(@NonNull Style loadedMapStyle) {
         // Check if permissions are enabled and if not request
         if (PermissionsManager.areLocationPermissionsGranted(this)) {
-            // Activate the MapboxMap LocationComponent to show user location
-            // Adding in LocationComponentOptions is also an optional parameter
+
+            LocationComponentOptions locationComponentOptions = LocationComponentOptions.builder(this)
+                    .pulseEnabled(true)
+                    .pulseColor(Color.BLUE)
+                    .pulseAlpha(.4f)
+                    .pulseFadeEnabled(true)
+                    .pulseInterpolator(new BounceInterpolator())
+                    .build();
+
+            LocationComponentActivationOptions locationComponentActivationOptions = LocationComponentActivationOptions
+                    .builder(this, loadedMapStyle)
+                    .locationComponentOptions(locationComponentOptions)
+                    .build();
+
+            // Get an instance of the component
             locationComponent = mapboxMap.getLocationComponent();
-            locationComponent.activateLocationComponent(this, loadedMapStyle);
+
+            // Activate the MapboxMap LocationComponent to show user location
+            // Adding in LocationComponentOptions is also an optional parameter, we are using it to customize and also the old method is deprecated.
+            locationComponent.activateLocationComponent(locationComponentActivationOptions);
+
+            // Enable it to make the component visible
             locationComponent.setLocationComponentEnabled(true);
+
+            //Getting current location of the user
+            Location usersCurrentLocation = locationComponent.getLastKnownLocation();
+            assert usersCurrentLocation != null;
+            Feature currentLocation = Feature.fromGeometry(Point.fromLngLat(usersCurrentLocation.getLongitude(), usersCurrentLocation.getLatitude()));
+            loadedMapStyle.addImage(ICON_ID, BitmapFactory.decodeResource(MainActivity.this.getResources(), R.drawable.map_marker_light));
+            loadedMapStyle.addSource(new GeoJsonSource(SOURCE_ID, currentLocation));
+            loadedMapStyle.addLayer(new SymbolLayer(LAYER_ID, SOURCE_ID)
+                    .withProperties(
+                            iconImage(ICON_ID),
+                            iconAllowOverlap(true),
+                            iconIgnorePlacement(true)
+                    )
+            );
+
             // Set the component's camera mode
-            locationComponent.setCameraMode(CameraMode.TRACKING);
+            locationComponent.setCameraMode(CameraMode.TRACKING_COMPASS);
         } else {
             permissionsManager = new PermissionsManager(this);
             permissionsManager.requestLocationPermissions(this);
